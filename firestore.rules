@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function prof() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function active() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && prof().active == true;
+    }
+    function isAdmin()   { return active() && prof().role == 'admin'; }
+    function isCashier() { return active() && prof().role in ['admin', 'cashier']; }
+    function setupDone() { return exists(/databases/$(database)/documents/meta/setup); }
+    function changed()   { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    // إعداد أول مرة (إنشاء حساب المدير الأول مرة واحدة بس)
+    match /meta/setup {
+      allow read: if true;
+      allow create: if signedIn() && !setupDone();
+    }
+
+    // إعدادات مشتركة: الأصناف الخلصانة (أي موظف) + وقت تنبيه التأخير (المدير)
+    match /meta/config {
+      allow read: if active();
+      allow create: if isAdmin() || (active() && request.resource.data.keys().hasOnly(['out']));
+      allow update: if isAdmin() || (active() && changed().hasOnly(['out']));
+    }
+
+    // سجل العمليات: أي موظف يسجّل، والمدير بس يقرأ، ومحدش يعدّل أو يمسح
+    match /audit/{id} {
+      allow read: if isAdmin();
+      allow create: if active() && request.resource.data.byUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // الحسابات
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if isAdmin()
+        || (request.auth.uid == uid && !setupDone() && request.resource.data.role == 'admin');
+      allow update, delete: if isAdmin();
+    }
+
+    // الطاولات: الكاشير والمدير يعدّلوا كل حاجة، الجرسون بس الاسم والملاحظة ومؤقت البلايستيشن
+    match /tables/{id} {
+      allow read: if active();
+      allow create, delete: if isCashier();
+      allow update: if isCashier()
+        || (active() && changed().hasOnly(['c', 'nt', 'st', 'hrs']));
+    }
+
+    // الطلبات
+    match /tickets/{id} {
+      allow read: if active();
+      allow create: if active()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.byUid == request.auth.uid;
+      // أي موظف يقدر يعلّم الطلب "نزل"، والكاشير يعدّل أي حاجة
+      allow update: if isCashier()
+        || (active()
+            && changed().hasOnly(['status', 'servedAt', 'servedBy'])
+            && request.resource.data.status == 'served');
+      // الجرسون يلغي طلبه هو لو لسه في الانتظار
+      allow delete: if isCashier()
+        || (active() && resource.data.byUid == request.auth.uid && resource.data.status == 'pending');
+    }
+
+    // المصروفات: الكاشير والمدير يسجّلوا، والحذف للمدير أو لصاحب المصروف
+    match /expenses/{id} {
+      allow read: if isCashier();
+      allow create: if isCashier() && request.resource.data.byUid == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (isCashier() && resource.data.byUid == request.auth.uid);
+    }
+
+    // الفواتير: الكاشير والمدير بس
+    match /bills/{id} {
+      allow read, create: if isCashier();
+      allow update, delete: if isAdmin();
+    }
+  }
+}
