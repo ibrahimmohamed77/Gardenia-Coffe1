@@ -69,6 +69,7 @@ h1{margin:0;font-size:20px;color:var(--gold);text-align:center;flex:1}
 .hbtns .btn.sm{padding:8px 10px}
 .bill .ed{background:transparent;color:var(--red);border:1px dashed var(--red);border-radius:8px;padding:2px 8px;font-size:12px;margin-top:6px}
 .dayrow{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:right;font-size:14px}
+<<<<<<< HEAD
 
 /* دخول + أدوار + طلبات */
 .login{max-width:360px;margin:0 auto;padding:40px 20px;display:flex;flex-direction:column;gap:12px}
@@ -123,3 +124,5 @@ h1{margin:0;font-size:20px;color:var(--gold);text-align:center;flex:1}
 .bdg.lt{background:#ff3b30;animation:blink 1s infinite}
 @keyframes blink{50%{opacity:.65}}
 .risk{color:var(--gold)}
+=======
+>>>>>>> 58976802d076f0caf326641966936abb3eb7a260
